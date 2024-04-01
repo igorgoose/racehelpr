@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: racehelpr-scraper
+
+scheduler:
+  volume: ${SCHEDULER_VOLUME:/home/i.shchepov@rit.va/Desktop/projects/racehelpr/racehelpr-scraper/volume}
+
+logging:
+  level:
+    com.igorgoose.racehelpr: debug

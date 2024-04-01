@@ -8,7 +8,7 @@ import java.util.*
 
 const val TOPIC = "raw_chrono_messages"
 
-fun main() {
+fun notMain() {
     val url = System.getenv("KART_CHRONO_URL")
     val client = StandardWebSocketClient()
 
