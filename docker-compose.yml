@@ -10,6 +10,8 @@ services:
       POSTGRES_USER: "conduktor"
       POSTGRES_PASSWORD: "change_me"
       POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
+    networks:
+      - postgres
 
   conduktor-console:
     image: conduktor/conduktor-console:1.21.1
@@ -25,16 +27,20 @@ services:
       CDK_MONITORING_ALERT-MANAGER-URL: http://conduktor-monitoring:9010/
       CDK_MONITORING_CALLBACK-URL: http://conduktor-platform:8080/monitoring/api/
       CDK_MONITORING_NOTIFICATIONS-CALLBACK-URL: http://localhost:8080
+    networks:
+      - conduktor
+      - postgres
+      - kafka
 
   conduktor-monitoring:
     image: conduktor/conduktor-console-cortex:1.21.1
     environment:
       CDK_CONSOLE-URL: "http://conduktor-console:8080"
+    networks:
+      - conduktor
 
   kafka:
     image: docker.io/bitnami/kafka:3.6
-    ports:
-      - "9092:9092"
     volumes:
       - "kafka-data:/bitnami"
     environment:
@@ -48,8 +54,15 @@ services:
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+    networks:
+      - kafka
 
 volumes:
   kafka-data:
   pg_data: { }
   conduktor_data: { }
+
+networks:
+  postgres:
+  kafka:
+  conduktor:

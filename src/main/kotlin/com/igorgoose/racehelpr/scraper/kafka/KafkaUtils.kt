@@ -14,7 +14,13 @@ import java.util.*
 import java.util.concurrent.ExecutionException
 
 
-fun createTopicsIfNotExist(bootstrapServers: String, topics: List<String>, logger: KLogger, recreate: Boolean = false) {
+fun createTopicsIfNotExist(
+    bootstrapServers: String,
+    topics: List<String>,
+    logger: KLogger,
+    maxTopicSize: Long,
+    recreate: Boolean
+) {
     val props = Properties().also {
         it[AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG] = bootstrapServers
         it[AdminClientConfig.CLIENT_ID_CONFIG] = "scraper-admin"
@@ -40,7 +46,7 @@ fun createTopicsIfNotExist(bootstrapServers: String, topics: List<String>, logge
             NewTopic(it, 1, -1).configs(
                 mapOf(
                     "compression.type" to "gzip",
-                    "retention.bytes" to "100000000", //100MB
+                    "retention.bytes" to maxTopicSize.toString(),
                     "retention.ms" to "-1"
                 )
             )

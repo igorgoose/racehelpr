@@ -28,6 +28,7 @@ class LabelManager(
         flush()
     }
 
+    // most definitely not thread safe, however I'll let it slide
     fun saveLabel(label: Label) {
         logger.debug { "Saving label $label" }
         if (flushRequired()) flush()
@@ -51,5 +52,9 @@ class LabelManager(
             if (flushString.isNotBlank()) volumeUtil.write(FILE, flushString.toByteArray())
             else logger.debug { "No labels to flush" }
         }
+    }
+
+    fun truncateLabels() {
+        volumeUtil.truncate(FILE)
     }
 }
