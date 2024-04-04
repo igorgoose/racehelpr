@@ -20,4 +20,4 @@ COPY --from=build $SRC_HOME/build/libs/racehelpr-scraper.jar /opt/racehelpr/race
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "/opt/racehelpr/speller-server.jar"]
+ENTRYPOINT ["java", "-jar", "/opt/racehelpr/racehelpr-scraper.jar"]
