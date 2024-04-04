@@ -2,8 +2,14 @@ spring:
   application:
     name: racehelpr-scraper
 
-scheduler:
-  volume: ${SCHEDULER_VOLUME:/home/i.shchepov@rit.va/Desktop/projects/racehelpr/racehelpr-scraper/volume}
+scraper:
+  kartchrono-url: ${KARTCHRONO_URL}
+  topic: raw_chrono_messages
+  volume: ${VOLUME_PATH}
+
+kafka:
+  topics: raw_chrono_messages
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 logging:
   level:

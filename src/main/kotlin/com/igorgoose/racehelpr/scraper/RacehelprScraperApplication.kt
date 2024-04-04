@@ -1,4 +1,4 @@
-package com.igorgoose.racehelpr
+package com.igorgoose.racehelpr.scraper
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication

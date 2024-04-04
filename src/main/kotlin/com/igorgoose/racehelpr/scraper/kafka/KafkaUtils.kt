@@ -1,5 +1,6 @@
-package com.igorgoose.racehelpr
+package com.igorgoose.racehelpr.scraper.kafka
 
+import io.github.oshai.kotlinlogging.KLogger
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.admin.NewTopic
@@ -12,11 +13,10 @@ import org.apache.kafka.common.serialization.StringSerializer
 import java.util.*
 import java.util.concurrent.ExecutionException
 
-const val BOOTSTRAP_SERVERS = "localhost:9092"
 
-fun createTopicsIfNotExist(topics: List<String>, recreate: Boolean = false) {
+fun createTopicsIfNotExist(bootstrapServers: String, topics: List<String>, logger: KLogger, recreate: Boolean = false) {
     val props = Properties().also {
-        it[AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG] = BOOTSTRAP_SERVERS
+        it[AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG] = bootstrapServers
         it[AdminClientConfig.CLIENT_ID_CONFIG] = "scraper-admin"
         it[AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG] = 5000
         it[AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG] = 5000
@@ -25,29 +25,41 @@ fun createTopicsIfNotExist(topics: List<String>, recreate: Boolean = false) {
 
     if (recreate) {
         try {
-            println("deleting topics $topics")
+            logger.debug { "deleting topics $topics" }
             admin.deleteTopics(topics).all().get().also {
-                println("topics have been deleted")
+                logger.debug { "topics have been deleted" }
             }
         } catch (ex: ExecutionException) {
-            if (ex.cause is UnknownTopicOrPartitionException) println("topics have been deleted")
+            if (ex.cause is UnknownTopicOrPartitionException) logger.debug { "topics have been deleted" }
         }
     }
 
     try {
-        println("creating topics: $topics")
-        admin.createTopics(topics.map { NewTopic(it, 1, -1) }).all().get().also {
-            println("topics have been created")
-        }
+        logger.debug { "creating topics: $topics" }
+        admin.createTopics(topics.map {
+            NewTopic(it, 1, -1).configs(
+                mapOf(
+                    "compression.type" to "gzip",
+                    "retention.bytes" to "100000000", //100MB
+                    "retention.ms" to "-1"
+                )
+            )
+        })
+            .all().get()
+            .also {
+                logger.debug { "topics have been created" }
+            }
     } catch (ex: ExecutionException) {
-        if (ex.cause is TopicExistsException) println(ex.cause!!.message)
+        if (ex.cause is TopicExistsException) logger.debug {
+            ex.cause!!.message
+        }
     }
 }
 
-fun createProducer(): KafkaProducer<Int, String> {
+fun createProducer(bootstrapServers: String): KafkaProducer<Int, String> {
     val props = Properties().also {
         // bootstrap server config is required for producer to connect to brokers
-        it[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = BOOTSTRAP_SERVERS
+        it[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = bootstrapServers
         // client id is not required, but it's good to track the source of requests beyond just ip/port
         // by allowing a logical application name to be included in server-side request logging
         it[ProducerConfig.CLIENT_ID_CONFIG] = "scraper-producer"
