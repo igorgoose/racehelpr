@@ -62,7 +62,7 @@ fun createTopicsIfNotExist(
     }
 }
 
-fun createProducer(bootstrapServers: String): KafkaProducer<Int, String> {
+fun createProducer(bootstrapServers: String): KafkaProducer<Int?, String> {
     val props = Properties().also {
         // bootstrap server config is required for producer to connect to brokers
         it[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = bootstrapServers
@@ -75,5 +75,5 @@ fun createProducer(bootstrapServers: String): KafkaProducer<Int, String> {
         it[ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG] = 5000
         it[ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG] = 5000
     }
-    return KafkaProducer<Int, String>(props)
+    return KafkaProducer<Int?, String>(props)
 }

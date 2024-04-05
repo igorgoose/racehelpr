@@ -43,6 +43,8 @@ services:
     image: docker.io/bitnami/kafka:3.6
     volumes:
       - "kafka-data:/bitnami"
+    ports:
+      - "9092:9092"
     environment:
       # KRaft settings (instead ZooKeeper)
       - KAFKA_CFG_NODE_ID=0

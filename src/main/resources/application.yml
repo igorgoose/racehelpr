@@ -1,6 +1,8 @@
 spring:
   application:
     name: racehelpr-scraper
+  codec:
+    max-in-memory-size: 10MB
 
 scraper:
   kartchrono-url: ${KARTCHRONO_URL}
@@ -16,4 +18,5 @@ kafka:
 
 logging:
   level:
+    root: debug
     com.igorgoose.racehelpr: debug

@@ -17,7 +17,7 @@ import kotlin.time.toJavaDuration
 
 
 class ScraperJob(
-    private val producer: KafkaProducer<Int, String>,
+    private val producer: KafkaProducer<Int?, String>,
     private val scraperTopic: String,
     private val labelManager: LabelManager,
     private val task: ScraperTask
@@ -25,8 +25,10 @@ class ScraperJob(
     private val logger = KotlinLogging.logger {}
 
     override fun handle(session: WebSocketSession): Mono<Void> {
+        val stopDelay = (task.stop.toEpochMilli() - Instant.now().toEpochMilli()).milliseconds
+        logger.debug { "Task $task will be stopped after $stopDelay" }
         val receive = session.receive()
-            .take((task.stop.toEpochMilli() - Instant.now().toEpochMilli()).milliseconds.toJavaDuration())
+            .take(stopDelay.toJavaDuration())
             .doOnNext { message ->
                 if (message.type == WebSocketMessage.Type.TEXT) {
                     processMessage(message.payloadAsText)
@@ -58,7 +60,7 @@ class ScraperJob(
                     labelManager.saveLabel(Label(meta.offset(), it))
                 }
                 headMap.keys.iterator().let { iter ->
-                    while(iter.hasNext()) {
+                    while (iter.hasNext()) {
                         iter.next()
                         iter.remove()
                     }

@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class WebSocketHandlerFactory(
-    private val producer: KafkaProducer<Int, String>,
+    private val producer: KafkaProducer<Int?, String>,
     private val labelManager: LabelManager,
     @Value("\${scraper.topic}") private val scraperTopic: String
 ) {

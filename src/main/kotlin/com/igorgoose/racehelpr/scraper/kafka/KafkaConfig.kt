@@ -1,7 +1,6 @@
 package com.igorgoose.racehelpr.scraper.kafka
 
 import com.igorgoose.racehelpr.scraper.label.LabelManager
-import com.igorgoose.racehelpr.scraper.util.VolumeUtil
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.context.event.ApplicationStartedEvent
@@ -15,9 +14,9 @@ class KafkaConfig(
     @Value("\${kafka.topics.names}") private val topics: List<String>,
     @Value("\${kafka.topics.max-size-bytes}") private val maxTopicSize: Long,
     @Value("\${kafka.topics.recreate}") private val recreate: Boolean,
-    private val labelManager: LabelManager
+    private val labelManager: LabelManager,
 ) {
-    private val logger = KotlinLogging.logger {  }
+    private val logger = KotlinLogging.logger { }
 
     @Bean
     fun kafkaProducer() = createProducer(bootstrapServers)
