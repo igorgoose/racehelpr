@@ -3,9 +3,7 @@ package com.igorgoose.racehelpr.scraper.label
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.igorgoose.racehelpr.scraper.util.VolumeUtil
 import io.github.oshai.kotlinlogging.KotlinLogging
-import jakarta.annotation.PreDestroy
 import org.springframework.stereotype.Component
-import java.util.concurrent.atomic.AtomicBoolean
 
 
 @Component
@@ -18,43 +16,32 @@ class LabelManager(
     }
 
     private val logger = KotlinLogging.logger { }
-    private val flushing = AtomicBoolean(false)
+    private val cache: MutableList<Label> = loadLabels()
 
-    @Volatile
-    private var buffer: ArrayList<Label> = ArrayList(50)
+    fun getAllLabels(): List<Label> = cache
 
-    @PreDestroy
-    fun flushRemaining() {
-        flush()
-    }
+    fun getByValue(value: String): Label? = cache.find { it.value == value }
 
     // most definitely not thread safe, however I'll let it slide
     fun saveLabel(label: Label) {
         logger.debug { "Saving label $label" }
-        if (flushRequired()) flush()
-        buffer.add(label)
-    }
-
-    private fun flushRequired(): Boolean = buffer.size >= 40
-
-    /*
-       using flushing field still does not guarantee that we can't write some more labels to bufferToFlush in saveLabel(),
-       however the main goal is to avoid flushing same buffer twice
-     */
-    fun flush() {
-        if (flushing.compareAndSet(false, true)) {
-            logger.debug { "Flushing labels" }
-            val bufferToFlush = buffer
-            buffer = ArrayList(50)
-            flushing.set(false)
-            val flushString =
-                bufferToFlush.joinToString(separator = "\n") { objectMapper.writeValueAsString(it) } + "\n"
-            if (flushString.isNotBlank()) volumeUtil.write(FILE, flushString.toByteArray())
-            else logger.debug { "No labels to flush" }
-        }
+        val flushString = objectMapper.writeValueAsString(label) + "\n"
+        volumeUtil.write(FILE, flushString.toByteArray())
+        cache.add(label)
     }
 
     fun truncateLabels() {
         volumeUtil.truncate(FILE)
+    }
+
+    private final fun loadLabels(): MutableList<Label> {
+        return when (val result = volumeUtil.readString(FILE)) {
+            is VolumeUtil.Data<String> -> result.data.split("\n")
+                .filter { it.isNotBlank() }
+                .map { objectMapper.readValue(it, Label::class.java) }
+                .toMutableList()
+
+            else -> mutableListOf()
+        }
     }
 }

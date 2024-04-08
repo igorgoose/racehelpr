@@ -18,5 +18,5 @@ kafka:
 
 logging:
   level:
-    root: debug
+    root: info
     com.igorgoose.racehelpr: debug
