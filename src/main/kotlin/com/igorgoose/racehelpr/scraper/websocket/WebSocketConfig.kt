@@ -1,8 +1,8 @@
 package com.igorgoose.racehelpr.scraper.websocket
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.igorgoose.racehelpr.scraper.kafka.KafkaConsumerFactory
-import com.igorgoose.racehelpr.scraper.kartchrono.KartchronoMockServerWebSocketHandler
+import com.igorgoose.racehelpr.scraper.kafka.KafkaConsumerUtils
+import com.igorgoose.racehelpr.scraper.kartchrono.KartchronoSessionManager
 import com.igorgoose.racehelpr.scraper.label.LabelManager
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -16,14 +16,10 @@ class WebSocketConfig {
     fun webSocketClient() = StandardWebSocketClient()
 
     @Bean
-    fun handlerMapping(kafkaConsumerFactory: KafkaConsumerFactory, labelManager: LabelManager, objectMapper: ObjectMapper): HandlerMapping =
-        SimpleUrlHandlerMapping(
-            mapOf(
-                "/mockserver" to KartchronoMockServerWebSocketHandler(
-                    kafkaConsumerFactory,
-                    objectMapper,
-                    labelManager
-                )
-            ), -1
-        )
+    fun handlerMapping(
+        kafkaConsumerUtils: KafkaConsumerUtils,
+        labelManager: LabelManager,
+        objectMapper: ObjectMapper,
+        kartchronoSessionManager: KartchronoSessionManager
+    ): HandlerMapping = SimpleUrlHandlerMapping(mapOf("/mockserver" to kartchronoSessionManager), -1)
 }
