@@ -5,7 +5,6 @@ import com.igorgoose.racehelpr.scraper.kartchrono.model.ApplyConfigurationReques
 import com.igorgoose.racehelpr.scraper.label.LabelManager
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.selects.select
@@ -13,8 +12,11 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.springframework.web.reactive.socket.WebSocketMessage
 import org.springframework.web.reactive.socket.WebSocketSession
+import java.time.Duration
+import java.util.*
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.coroutines.CoroutineContext
+import kotlin.time.Duration.Companion.milliseconds
 
 class KartchronoSession(
     private val session: WebSocketSession,
@@ -26,15 +28,21 @@ class KartchronoSession(
     companion object {
         private val logger = KotlinLogging.logger {}
     }
+
     override val coroutineContext: CoroutineContext = SupervisorJob() + context
 
     private val consumer: KafkaConsumer<Int?, String> by lazy(initConsumer)
     private val configChannel = Channel<KartchronoSessionConfiguration>()
     private val commandChannel = Channel<Command>()
-    private val emissionChannel = Channel<ConsumerRecord<Int?, String>>(1000, BufferOverflow.SUSPEND)
+    private val emissionChannel = Channel<ConsumerRecord<Int?, String>>()
     private val producerLock: ReentrantLock = ReentrantLock()
+
     @Volatile
     private var producerJob: Job? = null
+    private val messageQueue = LinkedList<ConsumerRecord<Int?, String>>()
+
+    @Volatile
+    private var prevEmission: Emission? = null
 
     suspend fun start(collector: FlowCollector<WebSocketMessage>) {
         log("Awaiting configuration", logger::debug)
@@ -50,7 +58,7 @@ class KartchronoSession(
                 commandChannel.onReceive {
                     react(it)
                 }
-                emissionChannel.onReceive { record ->
+                emissionChannel.onReceive { record: ConsumerRecord<Int?, String> ->
                     collector.emit(session.textMessage(record.value()))
                 }
             }
@@ -61,6 +69,12 @@ class KartchronoSession(
         log("Queueing pause command", logger::debug)
         commandChannel.send(Pause)
         log("Queued pause command", logger::debug)
+    }
+
+    suspend fun produce(count: Int = -1) {
+        log("Queuing produce command", logger::debug)
+        commandChannel.send(Produce(count))
+        log("Queued produce command", logger::debug)
     }
 
     private suspend fun doPause() {
@@ -81,6 +95,8 @@ class KartchronoSession(
                 } else {
                     log("No producer to pause", logger::debug)
                 }
+            } catch (e: Throwable) {
+                log("Error while pausing session", e, logger::error)
             } finally {
                 log("Releasing producer job lock", logger::debug)
                 producerLock.unlock()
@@ -90,30 +106,69 @@ class KartchronoSession(
         }
     }
 
-    suspend fun produce(count: Int = -1) {
-        log("Queuing produce command", logger::debug)
-        commandChannel.send(Produce(count))
-        log("Queued produce command", logger::debug)
-    }
-
     private fun doProduce(count: Int) {
         log("Creating producer to produce $count messages", logger::debug)
         createProducerJob {
             var cnt = count
             while (cnt == -1 || cnt > 0) {
-                log("producing", logger::info)
-                if (count > 0) cnt--
-                delay(1000)
+                if (!produceMessage()) break // if got nothing from kafka complete the job
+                if (cnt != -1) cnt--
             }
         }
     }
 
-    fun skipTo(offset: Int) {
-
+    fun produceTo(offset: Int) {
+        TODO("Not yet implemented")
     }
 
-    fun skipTo(label: String) {
+    fun produceTo(label: String) {
+        TODO("Not yet implemented")
+    }
 
+    fun fastForwardTo(offset: Int) {
+        TODO("Not yet implemented")
+    }
+
+    fun fastForwardTo(label: String) {
+        TODO("Not yet implemented")
+    }
+
+    fun setSpeed(speed: Float) {
+        TODO("Not yet implemented")
+    }
+
+    fun setLabel(label: String) {
+        TODO("Not yet implemented")
+    }
+
+    private suspend fun produceMessage(): Boolean {
+        if (messageQueue.isEmpty()) {
+            val records = withContext(Dispatchers.IO) {
+                consumer.poll(Duration.ofMillis(100))
+            }
+            if (records.isEmpty) {
+                return false
+            }
+            records.forEach {
+                messageQueue.offer(it)
+            }
+        }
+        val newMessage = messageQueue.poll()
+        calculateDelay(newMessage).also {
+            log("Delaying next message by ${it.milliseconds}", logger::debug)
+            delay(it)
+        }
+        emissionChannel.send(newMessage)
+        prevEmission = Emission(newMessage, System.currentTimeMillis())
+        return true
+    }
+
+    private fun calculateDelay(currentMessage: ConsumerRecord<Int?, String>): Long {
+        return prevEmission?.let { prev ->
+            val expectedDelay = currentMessage.timestamp() - prev.record.timestamp()
+            val timePassed = System.currentTimeMillis() - prev.timestamp
+            expectedDelay - timePassed
+        } ?: 0L
     }
 
     private suspend fun react(command: Command) {
@@ -133,9 +188,7 @@ class KartchronoSession(
         try {
             if (producerJob == null) {
                 log("Creating new producer: no currently active producer, just creating new one", logger::debug)
-                producerJob = launch(block = block).also {
-                    it.invokeOnCompletion { removeProducerJob() }
-                }
+                producerJob = newProducerJob(block)
             } else {
                 log(
                     "Creating new producer: found currently active producer, cancelling old one and replacing it",
@@ -146,9 +199,7 @@ class KartchronoSession(
                 producerJob!!.cancelAndJoin()
 
                 producerLock.lock()
-                producerJob = launch(block = block).also {
-                    it.invokeOnCompletion { removeProducerJob() }
-                }
+                producerJob = newProducerJob(block)
             }
         } finally {
             log("Unlocking producer job lock", logger::debug)
@@ -161,12 +212,20 @@ class KartchronoSession(
     }
 
     private fun removeProducerJob() {
+        log("Acquiring producer lock to remove current producer", logger::debug)
         producerLock.lock()
+        log("Acquired producer lock to remove current producer", logger::debug)
         try {
             producerJob = null
+            log("Removed producer", logger::debug)
         } finally {
+            log("Unlocking producer lock after removing producer", logger::debug)
             producerLock.unlock()
         }
+    }
+
+    private fun newProducerJob(block: suspend CoroutineScope.() -> Unit) = launch(block = block).also {
+        it.invokeOnCompletion { removeProducerJob() }
     }
 
     private fun ApplyConfigurationRequest.toConfig() = KartchronoSessionConfiguration(getOffset())
@@ -207,12 +266,17 @@ class KartchronoSession(
         }
     }
 
-    private fun log(message: String, exception: Throwable, func: (e: Throwable, () -> Any?) -> Unit) {
+    private inline fun log(message: String, exception: Throwable, func: (e: Throwable, () -> Any?) -> Unit) {
         func(exception) {
             "$message[sessionId=${session.id}]"
         }
     }
 }
+
+private class Emission(
+    val record: ConsumerRecord<Int?, String>,
+    val timestamp: Long
+)
 
 data class KartchronoSessionConfiguration(
     val offset: Long

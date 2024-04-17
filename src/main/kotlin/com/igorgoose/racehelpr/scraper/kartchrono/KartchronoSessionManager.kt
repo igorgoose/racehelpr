@@ -42,6 +42,7 @@ class KartchronoSessionManager(
         return session.send(createMessageFlow(session).asFlux())
             .doFinally {
                 logger.debug { "Removing session ${session.id}" }
+                sessionsById[session.id]?.close()
                 sessionsById.remove(session.id)
             }
     }
