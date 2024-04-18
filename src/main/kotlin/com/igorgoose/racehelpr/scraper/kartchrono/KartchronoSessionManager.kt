@@ -60,6 +60,22 @@ class KartchronoSessionManager(
         sessionsById[sessionId]?.produce(count) ?: error("No session found with id $sessionId")
     }
 
+    suspend fun produceToOffset(sessionId: String, offset: Long) {
+        sessionsById[sessionId]?.produceTo(offset) ?: error("No session found with id $sessionId")
+    }
+
+    suspend fun produceToLabel(sessionId: String, label: String) {
+        sessionsById[sessionId]?.produceTo(label) ?: error("No session found with id $sessionId")
+    }
+
+    suspend fun fastForwardToOffset(sessionId: String, offset: Long) {
+        sessionsById[sessionId]?.fastForwardTo(offset) ?: error("No session found with id $sessionId")
+    }
+
+    suspend fun fastForwardToLabel(sessionId: String, label: String) {
+        sessionsById[sessionId]?.fastForwardTo(label) ?: error("No session found with id $sessionId")
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class) // flatMapLatest
     private fun createMessageFlow(session: WebSocketSession): Flow<WebSocketMessage> {
         logger.debug { "Receiving kartchrono messages" }

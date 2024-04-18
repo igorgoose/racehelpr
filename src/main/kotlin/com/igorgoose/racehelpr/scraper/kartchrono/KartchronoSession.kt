@@ -111,26 +111,32 @@ class KartchronoSession(
         createProducerJob {
             var cnt = count
             while (cnt == -1 || cnt > 0) {
-                if (!produceMessage()) break // if got nothing from kafka complete the job
+                if (produceMessage() == null) break // if got nothing from kafka complete the job
                 if (cnt != -1) cnt--
             }
         }
     }
 
-    fun produceTo(offset: Int) {
-        TODO("Not yet implemented")
+    fun produceTo(offset: Long) {
+        log("Creating producer to produce messages to offset $offset", logger::debug)
+        doProduceToOffset(offset, fastForward = false)
     }
 
-    fun produceTo(label: String) {
-        TODO("Not yet implemented")
+    fun produceTo(labelValue: String) {
+        val label = labelManager.getByValue(labelValue) ?: error("No label found by value $labelValue")
+        log("Creating producer to produce messages to label $label", logger::debug)
+        doProduceToOffset(label.offset, fastForward = false)
     }
 
-    fun fastForwardTo(offset: Int) {
-        TODO("Not yet implemented")
+    fun fastForwardTo(offset: Long) {
+        log("Creating producer to fast forward to offset $offset", logger::debug)
+        doProduceToOffset(offset, fastForward = true)
     }
 
-    fun fastForwardTo(label: String) {
-        TODO("Not yet implemented")
+    fun fastForwardTo(labelValue: String) {
+        val label = labelManager.getByValue(labelValue) ?: error("No label found by value $labelValue")
+        log("Creating producer to fast forward to label $label", logger::debug)
+        doProduceToOffset(label.offset, fastForward = true)
     }
 
     fun setSpeed(speed: Float) {
@@ -141,26 +147,43 @@ class KartchronoSession(
         TODO("Not yet implemented")
     }
 
-    private suspend fun produceMessage(): Boolean {
+    private fun doProduceToOffset(offset: Long, fastForward: Boolean = false) {
+        createProducerJob {
+            var currentOffset = prevEmission?.record?.offset()
+            while (currentOffset != offset) {
+                val newMessage = produceMessage(fastForward)
+                if (newMessage == null) {
+                    log("No records left to produce, breaking", logger::debug)
+                    break
+                }
+                currentOffset = newMessage.offset()
+            }
+        }
+    }
+
+    private suspend fun produceMessage(fastForward: Boolean = false): ConsumerRecord<Int?, String>? {
         if (messageQueue.isEmpty()) {
             val records = withContext(Dispatchers.IO) {
                 consumer.poll(Duration.ofMillis(100))
             }
             if (records.isEmpty) {
-                return false
+                return null
             }
             records.forEach {
                 messageQueue.offer(it)
             }
         }
-        val newMessage = messageQueue.poll()
-        calculateDelay(newMessage).also {
-            log("Delaying next message by ${it.milliseconds}", logger::debug)
-            delay(it)
+        val newMessage = messageQueue.peek()
+        if (!fastForward) {
+            calculateDelay(newMessage).also {
+                log("Delaying next message by ${it.milliseconds}", logger::debug)
+                delay(it)
+            }
         }
         emissionChannel.send(newMessage)
+        messageQueue.poll()
         prevEmission = Emission(newMessage, System.currentTimeMillis())
-        return true
+        return newMessage
     }
 
     private fun calculateDelay(currentMessage: ConsumerRecord<Int?, String>): Long {

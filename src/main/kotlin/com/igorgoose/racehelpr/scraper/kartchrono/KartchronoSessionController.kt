@@ -20,7 +20,19 @@ class KartchronoSessionController(
     }
 
     @PostMapping("/{sessionId}/produce")
-    suspend fun produce(@PathVariable("sessionId") sessionId: String, @RequestParam("count") count: Int = -1) {
-        sessionManager.produce(sessionId, count)
+    suspend fun produce(
+        @PathVariable("sessionId") sessionId: String,
+        @RequestParam("count", required = false) count: Int = -1,
+        @RequestParam("label", required = false) label: String? = null,
+        @RequestParam("offset", required = false) offset: Long? = null,
+        @RequestParam("ff", required = false) fastForward: Boolean = false
+    ) {
+        if (label != null) {
+            if (fastForward) sessionManager.fastForwardToLabel(sessionId, label)
+            else sessionManager.produceToLabel(sessionId, label)
+        } else if (offset != null) {
+            if (fastForward) sessionManager.fastForwardToOffset(sessionId, offset)
+            else sessionManager.produceToOffset(sessionId, offset)
+        } else sessionManager.produce(sessionId, count)
     }
 }
