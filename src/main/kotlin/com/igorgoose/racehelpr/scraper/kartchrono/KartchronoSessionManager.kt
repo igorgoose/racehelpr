@@ -84,6 +84,12 @@ class KartchronoSessionManager(
         sessionsById[sessionId]?.setLabel(label) ?: error("No session found with id $sessionId")
     }
 
+    fun slowDown(sessionId: String, speed: Float) {
+        sessionsById[sessionId]?.let {
+            it.deceleration = speed
+        } ?: error("No session found with id $sessionId")
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class) // flatMapLatest
     private fun createMessageFlow(session: WebSocketSession): Flow<WebSocketMessage> {
         logger.debug { "Receiving kartchrono messages" }
@@ -126,5 +132,6 @@ class KartchronoSessionManager(
             release()
         }
     }
+
 
 }

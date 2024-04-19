@@ -45,6 +45,12 @@ class KartchronoSession(
 
     @Volatile
     private var prevEmission: Emission? = null
+    @Volatile
+    var deceleration: Float = 1f
+        set(value) {
+            log("Setting deceleration to $value", logger::debug)
+            field = value
+        }
 
     suspend fun start(collector: FlowCollector<WebSocketMessage>) {
         log("Awaiting configuration", logger::debug)
@@ -138,10 +144,6 @@ class KartchronoSession(
         doProduceToOffset(label.offset, fastForward = true)
     }
 
-    fun setSpeed(speed: Float) {
-        TODO("Not yet implemented")
-    }
-
     fun setLabel(label: String) {
         val currentOffset = max(0L, prevEmission?.record?.offset() ?: kafkaConsumerUtils.getOffset(consumer))
         labelManager.saveLabel(Label(currentOffset, label))
@@ -207,7 +209,7 @@ class KartchronoSession(
         return prevEmission?.let { prev ->
             val expectedDelay = currentMessage.timestamp() - prev.record.timestamp()
             val timePassed = System.currentTimeMillis() - prev.timestamp
-            expectedDelay - timePassed
+            ((expectedDelay - timePassed) * deceleration).toLong()
         } ?: 0L
     }
 

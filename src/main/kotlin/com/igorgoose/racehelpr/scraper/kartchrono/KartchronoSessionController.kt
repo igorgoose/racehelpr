@@ -39,8 +39,13 @@ class KartchronoSessionController(
         }
     }
 
-    @PostMapping("/{sessionId}/label")
+    @PostMapping("/{sessionId}/assign-label")
     suspend fun setLabel(@PathVariable("sessionId") sessionId: String, @RequestParam label: String) {
         sessionManager.setLabel(sessionId, label)
+    }
+
+    @PostMapping("/{sessionId}/slowdown")
+    suspend fun setLabel(@PathVariable("sessionId") sessionId: String, @RequestParam coef: Float) {
+        sessionManager.slowDown(sessionId, coef)
     }
 }
