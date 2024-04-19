@@ -8,6 +8,8 @@ import org.apache.kafka.common.serialization.StringDeserializer
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.util.*
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toJavaDuration
 
 @Component
 class KafkaConsumerUtils(
@@ -28,5 +30,9 @@ class KafkaConsumerUtils(
 
     fun setOffset(consumer: KafkaConsumer<Int?, String>, offset: Long) {
         consumer.seek(TopicPartition(topic, 0), offset)
+    }
+
+    fun getOffset(consumer: KafkaConsumer<Int?, String>): Long {
+        return consumer.position(TopicPartition(topic, 0), 3.seconds.toJavaDuration())
     }
 }

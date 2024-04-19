@@ -2,6 +2,7 @@ package com.igorgoose.racehelpr.scraper.kartchrono
 
 import com.igorgoose.racehelpr.scraper.kafka.KafkaConsumerUtils
 import com.igorgoose.racehelpr.scraper.kartchrono.model.ApplyConfigurationRequest
+import com.igorgoose.racehelpr.scraper.label.Label
 import com.igorgoose.racehelpr.scraper.label.LabelManager
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
@@ -16,6 +17,7 @@ import java.time.Duration
 import java.util.*
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.coroutines.CoroutineContext
+import kotlin.math.max
 import kotlin.time.Duration.Companion.milliseconds
 
 class KartchronoSession(
@@ -49,9 +51,7 @@ class KartchronoSession(
 
         val config = configChannel.receive()
         kafkaConsumerUtils.setOffset(consumer, config.offset)
-
-        log("Received configuration $config, producing messages", logger::debug)
-        doProduce(-1)
+        log("Received configuration $config, ready to produce messages", logger::debug)
 
         while (isActive) {
             select {
@@ -108,13 +108,7 @@ class KartchronoSession(
 
     private fun doProduce(count: Int) {
         log("Creating producer to produce $count messages", logger::debug)
-        createProducerJob {
-            var cnt = count
-            while (cnt == -1 || cnt > 0) {
-                if (produceMessage() == null) break // if got nothing from kafka complete the job
-                if (cnt != -1) cnt--
-            }
-        }
+        doProduceCount(count, fastForward = false)
     }
 
     fun produceTo(offset: Long) {
@@ -126,6 +120,11 @@ class KartchronoSession(
         val label = labelManager.getByValue(labelValue) ?: error("No label found by value $labelValue")
         log("Creating producer to produce messages to label $label", logger::debug)
         doProduceToOffset(label.offset, fastForward = false)
+    }
+
+    fun fastForward(count: Int) {
+        log("Creating producer to fast forward $count messages ahead", logger::debug)
+        doProduceCount(count, fastForward = true)
     }
 
     fun fastForwardTo(offset: Long) {
@@ -144,7 +143,18 @@ class KartchronoSession(
     }
 
     fun setLabel(label: String) {
-        TODO("Not yet implemented")
+        val currentOffset = max(0L, prevEmission?.record?.offset() ?: kafkaConsumerUtils.getOffset(consumer))
+        labelManager.saveLabel(Label(currentOffset, label))
+    }
+
+    private fun doProduceCount(count: Int, fastForward: Boolean = false) {
+        createProducerJob {
+            var cnt = count
+            while (cnt == -1 || cnt > 0) {
+                if (produceMessage(fastForward) == null) break // if got nothing from kafka complete the job
+                if (cnt != -1) cnt--
+            }
+        }
     }
 
     private fun doProduceToOffset(offset: Long, fastForward: Boolean = false) {
@@ -162,28 +172,35 @@ class KartchronoSession(
     }
 
     private suspend fun produceMessage(fastForward: Boolean = false): ConsumerRecord<Int?, String>? {
-        if (messageQueue.isEmpty()) {
-            val records = withContext(Dispatchers.IO) {
-                consumer.poll(Duration.ofMillis(100))
+        try {
+            if (messageQueue.isEmpty()) {
+                log("Message queue is empty, trying to fetch more records", logger::debug)
+                val records = withContext(Dispatchers.IO) {
+                    consumer.poll(Duration.ofMillis(100))
+                }
+                if (records.isEmpty) {
+                    log("No records fetched, cancelling current producer job", logger::debug)
+                    return null
+                }
+                records.forEach {
+                    messageQueue.offer(it)
+                }
             }
-            if (records.isEmpty) {
-                return null
+            val newMessage = messageQueue.peek()
+            if (!fastForward) {
+                calculateDelay(newMessage).also {
+                    log("Delaying next message by ${it.milliseconds}", logger::debug)
+                    delay(it)
+                }
             }
-            records.forEach {
-                messageQueue.offer(it)
-            }
+            emissionChannel.send(newMessage)
+            messageQueue.poll()
+            prevEmission = Emission(newMessage, System.currentTimeMillis())
+            return newMessage
+        } catch (e: Throwable) {
+            log("Error while producing message", e, logger::error)
+            throw e
         }
-        val newMessage = messageQueue.peek()
-        if (!fastForward) {
-            calculateDelay(newMessage).also {
-                log("Delaying next message by ${it.milliseconds}", logger::debug)
-                delay(it)
-            }
-        }
-        emissionChannel.send(newMessage)
-        messageQueue.poll()
-        prevEmission = Emission(newMessage, System.currentTimeMillis())
-        return newMessage
     }
 
     private fun calculateDelay(currentMessage: ConsumerRecord<Int?, String>): Long {

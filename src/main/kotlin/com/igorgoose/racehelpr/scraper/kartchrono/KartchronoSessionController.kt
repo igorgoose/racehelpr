@@ -33,6 +33,14 @@ class KartchronoSessionController(
         } else if (offset != null) {
             if (fastForward) sessionManager.fastForwardToOffset(sessionId, offset)
             else sessionManager.produceToOffset(sessionId, offset)
-        } else sessionManager.produce(sessionId, count)
+        } else {
+            if (fastForward) sessionManager.fastForward(sessionId, count)
+            else sessionManager.produce(sessionId, count)
+        }
+    }
+
+    @PostMapping("/{sessionId}/label")
+    suspend fun setLabel(@PathVariable("sessionId") sessionId: String, @RequestParam label: String) {
+        sessionManager.setLabel(sessionId, label)
     }
 }

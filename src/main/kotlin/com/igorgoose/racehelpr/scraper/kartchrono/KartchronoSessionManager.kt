@@ -68,12 +68,20 @@ class KartchronoSessionManager(
         sessionsById[sessionId]?.produceTo(label) ?: error("No session found with id $sessionId")
     }
 
+    suspend fun fastForward(sessionId: String, count: Int) {
+        sessionsById[sessionId]?.fastForward(count) ?: error("No session found with id $sessionId")
+    }
+
     suspend fun fastForwardToOffset(sessionId: String, offset: Long) {
         sessionsById[sessionId]?.fastForwardTo(offset) ?: error("No session found with id $sessionId")
     }
 
     suspend fun fastForwardToLabel(sessionId: String, label: String) {
         sessionsById[sessionId]?.fastForwardTo(label) ?: error("No session found with id $sessionId")
+    }
+
+    fun setLabel(sessionId: String, label: String) {
+        sessionsById[sessionId]?.setLabel(label) ?: error("No session found with id $sessionId")
     }
 
     @OptIn(ExperimentalCoroutinesApi::class) // flatMapLatest
@@ -95,46 +103,6 @@ class KartchronoSessionManager(
             kartchronoSession.start(this)
         }
     }
-
-//    private fun processMessage(message: WebSocketMessage, session: WebSocketSession): Flow<WebSocketMessage> {
-//        val trackChosen = AtomicBoolean(false)
-//        return flow {
-//            suspendCancellableCoroutine { continuation ->
-//
-//            }
-//            when (val stage = session.attributes["stage"]) {
-//                SessionStage.INIT -> {
-//                    val request = parseRequest(message.getTextAndRelease())
-//                    if (request != null) {
-//                        val dispenser = createDispenser(request.getOffset(), session)
-//                        session.attributes["stage"] = SessionStage.DISPENSE
-//                        session.attributes["dispenser"] = dispenser
-//                        dispenser.dispense()
-//                    }
-//                }
-//
-//                SessionStage.DISPENSE -> {
-//                    val dispenser = session.attributes["dispenser"] as? Dispenser
-//                        ?: error("Illegal dispenser type ${session.attributes["dispenser"]}")
-//                    dispenser.react(message)
-//                }
-//
-//                else -> error("Unknown stage $stage")
-//            }
-//        }
-//    }
-
-//    private fun FlowCollector<WebSocketMessage>.createDispenser(offset: Long, session: WebSocketSession): Dispenser {
-//        val consumer = kafkaConsumerUtils.createScraperConsumer()
-//        return InstantDispenser(
-//            session = session,
-//            messageCollector = this,
-//            kafkaConsumerUtils = kafkaConsumerUtils,
-//            consumer = consumer,
-//            initialOffset = offset
-//        )
-//    }
-
 
     private fun parseRequest(message: String): KartchronoTrackRequest? {
         try {
@@ -159,60 +127,4 @@ class KartchronoSessionManager(
         }
     }
 
-//    private fun createRequestedDataFlow(
-//        request: ApplyConfigurationRequest,
-//        session: WebSocketSession
-//    ): Flow<WebSocketMessage> {
-//        logger.debug { "Received start message -> starting to send data" }
-//        return flow {
-//            try {
-//                kafkaConsumerUtils.createScraperConsumer(offset = request.getOffset()).use { consumer ->
-//                    while (true) {
-//                        logger.debug { "Consuming kartchrono messages from kafka" }
-//                        val records: ConsumerRecords<Int?, String> = withContext(Dispatchers.IO) {
-//                            consumer.poll(1.seconds.toJavaDuration())
-//                        }
-//                        emitRecords(records, session, true) // TODO replace with dispenser mode
-//                    }
-//                }
-//            } catch (ex: Throwable) {
-//                logger.error(ex) { "Error occurred during reading kafka messages" }
-//            } finally {
-//                logger.info { "Completed producing kartchrono messages" }
-//            }
-//        }
-//    }
-//
-//
-//    // TODO consider delays between messages in batches
-//    private suspend fun FlowCollector<WebSocketMessage>.emitRecords(
-//        records: ConsumerRecords<Int?, String>,
-//        session: WebSocketSession,
-//        realTime: Boolean
-//    ) {
-//        if (realTime) {
-//            logger.debug { "Emitting kartchrono messages in realtime mode" }
-//            var prevTimestamp = -1L
-//            records.forEach { consumerRecord ->
-//                logger.debug { "Got kafka record[offset=${consumerRecord.offset()}, value=$consumerRecord.value()}]" }
-//                if (prevTimestamp != -1L) {
-//                    val delayMs = consumerRecord.timestamp() - prevTimestamp
-//                    logger.debug { "Delaying next record emission by ${delayMs.milliseconds}" }
-//                    delay(delayMs) // nitpicking: should also consider the time we spend emitting
-//                }
-//                prevTimestamp = consumerRecord.timestamp()
-//                emit(session.textMessage(consumerRecord.value()))
-//            }
-//        } else {
-//            logger.debug { "Emitting kartchrono messages instantly" }
-//            records.forEach { consumerRecord ->
-//                logger.debug { "Got kafka record[offset=${consumerRecord.offset()}, value=$consumerRecord.value()}]" }
-//                emit(session.textMessage(consumerRecord.value()))
-//            }
-//        }
-//    }
-//
-//    private enum class SessionStage {
-//        INIT, DISPENSE
-//    }
 }
