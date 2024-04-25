@@ -13,7 +13,6 @@ import org.apache.kafka.common.serialization.StringSerializer
 import java.util.*
 import java.util.concurrent.ExecutionException
 
-
 fun createTopicsIfNotExist(
     bootstrapServers: String,
     topics: List<String>,

@@ -132,6 +132,4 @@ class KartchronoSessionManager(
             release()
         }
     }
-
-
 }

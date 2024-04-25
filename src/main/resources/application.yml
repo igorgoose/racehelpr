@@ -13,7 +13,7 @@ kafka:
   topics:
     names: raw_chrono_messages
     max-size-bytes: ${MAX_TOPIC_SIZE_BYTES:100000} # 100 MB
-    recreate: ${RECREATE_TOPICS:true}
+    recreate: ${RECREATE_TOPICS:false}
   bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 logging:
